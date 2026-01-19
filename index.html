@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NGL – Kelas Pemasaran 1 | Premium Realtime</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+:root{
+  --bg1:#0b1020;--bg2:#141a33;--bg3:#1b2550;
+  --accent:#59f1dc;--pink:#ff6fb1;--glass:rgba(255,255,255,0.10);
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:'Poppins',sans-serif;background:
+radial-gradient(circle at 15% 20%, rgba(255,111,177,.18), transparent 40%),
+radial-gradient(circle at 80% 80%, rgba(89,241,220,.18), transparent 40%),
+linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));
+display:flex;justify-content:center;align-items:center;color:#fff}
+.card{position:relative;width:100%;max-width:520px;padding:32px 28px 30px;border-radius:28px;background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05));backdrop-filter:blur(18px) saturate(150%);box-shadow:0 40px 80px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.08);text-align:center}
+h1{margin:0 0 8px;font-size:26px;font-weight:700}
+h1 span{color:var(--pink)}
+.subtitle{font-size:13px;opacity:.85;margin-bottom:18px}
+textarea,input[type=file],input[type=password]{width:100%;border:none;outline:none;border-radius:14px;padding:14px;margin:8px 0}
+textarea{min-height:90px;resize:none}
+button{padding:12px 18px;border:none;border-radius:16px;cursor:pointer;margin:4px;font-weight:600;transition:.25s}
+.send{background:linear-gradient(135deg,var(--accent),#9af5ea)}
+.adminbtn{background:linear-gradient(135deg,#ffd2e7,var(--pink))}
+.ss{background:linear-gradient(135deg,var(--pink),#ff9acb);color:#fff}
+.export{background:linear-gradient(135deg,#8ef7ff,var(--accent))}
+.back{background:#aaa}
+.hidden{display:none}
+.messages{margin-top:16px;max-height:300px;overflow:auto;text-align:left}
+.msg{background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.06));padding:12px 14px;border-radius:18px;margin-bottom:10px;position:relative}
+.msg img{max-width:100%;border-radius:12px;margin-top:6px}
+.del{position:absolute;right:10px;top:8px;font-size:12px;color:#ffb3cf;cursor:pointer}
+.overlay{position:fixed;inset:0;background:rgba(8,10,25,.75);backdrop-filter:blur(8px);display:none;justify-content:center;align-items:center;z-index:10}
+.modal,.preview{background:linear-gradient(145deg,#1a2455,#2b3b78);padding:28px;border-radius:24px;min-width:280px;max-width:90%;text-align:center}
+.preview{background:linear-gradient(145deg,#1a2455,#ff6fb1)}
+footer{margin-top:10px;font-size:12px;opacity:.7}
+</style>
+</head>
+<body>
+
+<!-- USER PAGE -->
+<div class="card" id="userPage">
+  <h1>NGL – <span>Kelas Pemasaran 1</span></h1>
+  <div class="subtitle">Kirim pesan anonim (Realtime) ✨</div>
+  <textarea id="u_text" placeholder="Tulis pesan anonim..."></textarea>
+  <input type="file" id="u_img" accept="image/*" />
+  <button class="send" onclick="sendMsg()">Kirim</button>
+  <button class="adminbtn" onclick="openAdminLogin()">Admin Panel</button>
+  <footer>Pesan langsung muncul di HP admin</footer>
+</div>
+
+<!-- ADMIN PAGE -->
+<div class="card hidden" id="adminPage">
+  <h1>Admin <span>Panel</span></h1>
+  <div class="subtitle">Realtime message monitor</div>
+  <button class="ss" onclick="ssAdmin()">Screenshot</button>
+  <button class="export" onclick="exportCSV()">Export CSV</button>
+  <button class="back" onclick="logoutAdmin()">Keluar</button>
+  <div>Total pesan: <span id="count">0</span></div>
+  <div class="messages" id="adminMessages"></div>
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="adminLoginOverlay">
+  <div class="modal">
+    <h3>Login Admin</h3>
+    <input type="password" id="adminPass" placeholder="Password admin" />
+    <button class="send" onclick="loginAdmin()">Masuk</button>
+    <button class="back" onclick="closeAdminLogin()">Batal</button>
+  </div>
+</div>
+
+<div class="overlay" id="deleteOverlay">
+  <div class="modal">
+    <h3>Hapus pesan?</h3>
+    <button class="send" onclick="confirmDelete()">Hapus</button>
+    <button class="back" onclick="closeDeleteModal()">Batal</button>
+  </div>
+</div>
+
+<div class="overlay" id="previewOverlay">
+  <div>
+    <div class="preview" id="preview"></div><br>
+    <button class="ss" onclick="ssOne()">Screenshot</button>
+    <button class="back" onclick="closePreview()">Tutup</button>
+  </div>
+</div>
+
+<script>
+/*************** FIREBASE CONFIG ***************/
+// GANTI dengan config project Firebase kamu
+const firebaseConfig = {
+  databaseURL: "https://nglproject-4cefa.firebaseio.com",
+  apiKey: "AIzaSyAl741wBR3WGxr_EdrPlbcznWdrz1b8xFU",
+  authDomain: "nglproject-4cefa.firebaseapp.com",
+  projectId: "nglproject-4cefa",
+  storageBucket: "nglproject-4cefa.firebasestorage.app",
+  messagingSenderId: "461573425034",
+  appId: "1:461573425034:web:400ecb7b439f21d5fdaa73",
+  measurementId: "G-DQ4N344DJZ"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const messagesRef = db.ref("messages");
+
+const ADMIN_PASS="admin123";
+let deleteTargetKey=null;
+
+const userPage=document.getElementById('userPage');
+const adminPage=document.getElementById('adminPage');
+const adminMessages=document.getElementById('adminMessages');
+const countSpan=document.getElementById('count');
+const preview=document.getElementById('preview');
+
+/*************** USER ***************/
+function sendMsg(){
+ const text=u_text.value.trim();
+ const file=u_img.files[0];
+ if(!text && !file)return alert('Isi pesan atau gambar');
+
+ const msg={text, img:null, time:Date.now()};
+
+ if(file){
+  const r=new FileReader();
+  r.onload=()=>{msg.img=r.result;messagesRef.push(msg);clearUserForm();alert('Pesan terkirim realtime!')};
+  r.readAsDataURL(file);
+ } else {
+  messagesRef.push(msg);
+  clearUserForm();
+  alert('Pesan terkirim realtime!');
+ }
+}
+
+function clearUserForm(){u_text.value='';u_img.value=''}
+
+/*************** ADMIN ***************/
+function openAdminLogin(){adminLoginOverlay.style.display='flex'}
+function closeAdminLogin(){adminLoginOverlay.style.display='none'}
+
+function loginAdmin(){
+ if(adminPass.value===ADMIN_PASS){closeAdminLogin();showAdminPage();}
+ else alert('Password salah');
+}
+
+function showAdminPage(){
+ userPage.classList.add('hidden');
+ adminPage.classList.remove('hidden');
+ listenMessages();
+}
+
+function logoutAdmin(){
+ adminPage.classList.add('hidden');
+ userPage.classList.remove('hidden');
+}
+
+function listenMessages(){
+ messagesRef.on('value',snap=>{
+  adminMessages.innerHTML='';
+  let count=0;
+  snap.forEach(child=>{
+    count++;
+    addAdminMsg(child.key, child.val());
+  });
+  countSpan.textContent=count;
+ });
+}
+
+function addAdminMsg(key,m){
+ const d=document.createElement('div');d.className='msg';
+ d.innerHTML=`<div>${m.text||''}</div>`+(m.img?`<img src="${m.img}"/>`:'');
+ d.onclick=()=>openPreview(m);
+ const del=document.createElement('span');del.className='del';del.textContent='hapus';
+ del.onclick=(e)=>{e.stopPropagation();openDeleteModal(key)};
+ d.appendChild(del);
+ adminMessages.prepend(d);
+}
+
+function openDeleteModal(key){deleteTargetKey=key;deleteOverlay.style.display='flex'}
+function closeDeleteModal(){deleteOverlay.style.display='none'}
+function confirmDelete(){messagesRef.child(deleteTargetKey).remove();closeDeleteModal()}
+
+/*************** PREVIEW + SS ***************/
+function openPreview(m){preview.innerHTML=`<div>${m.text||''}</div>`+(m.img?`<img src="${m.img}"/>`:'');previewOverlay.style.display='flex'}
+function closePreview(){previewOverlay.style.display='none'}
+function ssOne(){html2canvas(preview).then(c=>download(c,'pesan.png'))}
+function ssAdmin(){html2canvas(adminPage).then(c=>download(c,'admin_panel.png'))}
+function download(c,n){let a=document.createElement('a');a.href=c.toDataURL();a.download=n;a.click()}
+
+/*************** EXPORT ***************/
+function exportCSV(){
+ messagesRef.once('value',snap=>{
+  let arr=[];
+  snap.forEach(c=>arr.push(c.val()));
+  if(!arr.length)return alert('Tidak ada pesan');
+  let csv='Pesan\n'+arr.map(m=>`"${(m.text||'').replace(/"/g,'""')}"`).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ngl.csv';a.click();
+ });
+}
+</script>
+</body>
+</html>
